@@ -1,0 +1,59 @@
+# openspec/config.yaml
+schema: spec-driven
+
+project: smallcaps_framework
+detected: 2026-09-19
+
+context: |
+  Stack: Python 3.9+ (stdlib + PyYAML 6.0.3), pip/venv, no framework.
+  Architecture: SDD process; entity/interface/implementations under src/download/.
+  Testing: unittest discovery; no coverage/lint/type/format tooling.
+  Style: PEP 8, 100-char lines, double quotes, f-strings (docs/conventions.md).
+
+strict_tdd: true
+
+testing:
+  workspace_test_command: "python -m unittest discover -s tests -v"
+  runner: unittest
+  coverage: false
+  linter: false
+  type_checker: false
+  formatter: false
+
+projects:
+  - path: "."
+    stack: "Python 3.9+ (stdlib + PyYAML 6.0.3)"
+    test_command: "python -m unittest discover -s tests -v"
+    framework: "unittest"
+    test_layers:
+      unit: true
+      integration: false
+      e2e: false
+    coverage: null
+    linter: null
+    type_checker: null
+    formatter: null
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Document architecture decisions with rationale in docs/architecture.md
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    guidelines:
+      - Follow existing code patterns (entity/interface/implementations)
+      - Follow docs/conventions.md (PEP 8, 100-char lines, double quotes)
+    tdd: true
+    test_command: "python -m unittest discover -s tests -v"
+  verify:
+    test_command: "python -m unittest discover -s tests -v"
+    build_command: "bash ./init.sh"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas

@@ -1,0 +1,7 @@
+- ticker: TNMG
+  end_day: "18/09/2026"
+  days: 10
+
+- ticker: TRUG
+  end_day: "18/09/2026"
+  days: 10

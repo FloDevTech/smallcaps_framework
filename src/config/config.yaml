@@ -1,0 +1,3 @@
+# Las rutas relativas parten de la raíz del proyecto.
+data_dir: E:\smallcaps_data
+provider: cs #cs =  charles schwab, massive =  massive , ib = iteractive broke
