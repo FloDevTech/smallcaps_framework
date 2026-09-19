@@ -1,3 +1,4 @@
 PyYAML==6.0.3
 polars==1.44.2
 tzdata==2026.4
+plotly==5.15.0
