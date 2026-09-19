@@ -34,8 +34,8 @@ Estos son objetivos del proyecto, no capacidades ya implementadas ni resultados 
 | Comando download: validación de solicitudes y destino | Implementado |
 | Entidad MarketBar y validación OHLCV/spread | Implementado |
 | Interfaz común DataDownloader | Implementado |
-| Archivo del proveedor Massive | Base creada; conexión pendiente |
-| Descarga real y almacenamiento incremental | Pendiente |
+| Archivo del proveedor Massive | Implementado (REST 1m) |
+| Descarga incremental y almacenamiento Parquet | Implementado (solo massive) |
 | Minería, outcomes, backtesting y alertas | Pendiente |
 
 ## Inicio rápido — Windows / PowerShell
@@ -47,7 +47,7 @@ python -m venv venv
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Si ya existe `venv`, basta con instalar los requisitos. El código utiliza Python 3.9+; el entorno de desarrollo se ha verificado con Python 3.14. La dependencia actual es PyYAML. Polars forma parte del diseño previsto, pero aún no está incorporado.
+Si ya existe `venv`, basta con instalar los requisitos. El código utiliza Python 3.9+; el entorno de desarrollo se ha verificado con Python 3.14. Dependencias: PyYAML, Polars y tzdata.
 
 ### Configuración
 
@@ -64,7 +64,7 @@ Las rutas relativas parten de la raíz del proyecto. También se admiten rutas a
 New-Item -ItemType Directory -Force data
 ```
 
-La configuración del repositorio puede contener una ruta propia del equipo: ajústala antes de ejecutar. Los códigos de proveedor se validan, pero todavía no activan una conexión real.
+La configuración del repositorio puede contener una ruta propia del equipo: ajústala antes de ejecutar. Los códigos de proveedor se validan; solo `massive` activa una conexión real. Para descargar, define la variable de entorno `MASSIVE_API_KEY` con tu clave de Massive.
 
 ### Solicitudes
 
@@ -80,7 +80,7 @@ Edita `src/config/tickers_download.yaml`:
   days: 10
 ```
 
-`end_day` requiere una fecha válida `DD/MM/AAAA` y `days` un entero positivo. La interpretación de días naturales frente a sesiones bursátiles se definirá antes de conectar la descarga.
+`end_day` requiere una fecha válida `DD/MM/AAAA` y `days` un entero positivo. El intervalo de descarga es `[end_day - days, end_day)` en días naturales UTC; la interpretación de sesiones bursátiles queda pendiente.
 
 ### Ejecutar
 
@@ -88,7 +88,7 @@ Edita `src/config/tickers_download.yaml`:
 .\venv\Scripts\python.exe src\small_cli.py download
 ```
 
-Actualmente el comando lee los YAML, valida todas las solicitudes y comprueba que el destino existe y permite escribir. La comprobación crea y elimina un archivo temporal. Muestra el proveedor, la ruta y las solicitudes, e indica que **no se han descargado datos**.
+Con `provider: massive`, el comando descarga las barras 1m de cada ticker en `data_dir/{TICKER}.parquet`, de forma incremental: conserva lo ya descargado y agrega solo las barras faltantes. Requiere la variable `MASSIVE_API_KEY`. Con otro proveedor, valida la configuración e indica que la descarga aún no está implementada.
 
 Para indicar otros archivos:
 
@@ -106,10 +106,12 @@ src/
 ├── config/
 │   ├── config.yaml
 │   └── tickers_download.yaml
-└── download/
-    ├── entity.py       # Entidad MarketBar
-    ├── interface.py    # Contrato y validación común
-    └── massive.py      # Primera implementación prevista; API pendiente
+├── download/
+│   ├── entity.py       # Entidad MarketBar
+│   ├── interface.py    # Contrato y validación común
+│   └── massive.py      # Proveedor Massive (REST)
+└── storage/
+    └── parquet_store.py # Almacenamiento Parquet por ticker
 tests/                 # Pruebas sin conexión a proveedores
 openspec/              # Flujo SDD: config, specs y changes
 specs/                 # Especificaciones históricas (funciones cerradas)
@@ -124,18 +126,20 @@ Cada módulo separa **entidad, interfaz e implementaciones**. Se añaden compone
 
 | Campo | Significado |
 | --- | --- |
-| datetime | Inicio de la barra con zona horaria |
+| datetime | Inicio de la barra con zona horaria (UTC) |
 | open, high, low, close | Precios OHLC |
 | volume | Volumen entero no negativo |
 | spread | ask − bid en unidades de precio; None si no está disponible |
+| vwap | Precio medio ponderado por volumen; None si no está disponible |
+| transactions | Número de transacciones de la barra; None si no está disponible |
 
 Los proveedores heredan `DataDownloader` e implementan `_download(ticker, start, end)`. El método público `download` valida entradas y resultados: devuelve una lista de `MarketBar`, ordenada, sin duplicados y dentro del intervalo **`[start, end)`**.
 
-El spread ausente no se sustituye por cero ni se deduce de OHLC. Un error del proveedor tampoco se convierte en una lista vacía. El archivo inicial de Massive lanza `NotImplementedError` hasta que se implemente la conexión.
+El spread ausente no se sustituye por cero ni se deduce de OHLC. `vwap` y `transactions` son opcionales: se llenan cuando el proveedor los entrega (Massive los entrega). Un error del proveedor tampoco se convierte en una lista vacía.
 
-## Almacenamiento: decisión pendiente
+## Almacenamiento
 
-La recomendación para el MVP es **Parquet local con Polars**: archivos columnares comprimidos y lectura selectiva de columnas y rangos. DynamoDB se evaluaría si apareciera una necesidad concreta de consultas operativas compartidas en AWS. Todavía no existe persistencia implementada ni una decisión definitiva sobre ella.
+Las barras se guardan en **Parquet local con Polars**, un archivo por ticker en `data_dir/{TICKER}.parquet`. La escritura es incremental: se conservan las barras existentes (deduplicación por `datetime`) y se agregan solo las faltantes, con escritura atómica. DynamoDB se evaluaría si apareciera una necesidad concreta de consultas operativas compartidas en AWS.
 
 Referencias: [Apache Parquet](https://parquet.apache.org/docs/overview/), [lectura Parquet en Polars](https://docs.pola.rs/api/python/stable/reference/api/polars.scan_parquet.html) y [consultas y escaneos en DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-query-scan.html).
 
