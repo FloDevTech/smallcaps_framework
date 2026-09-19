@@ -6,6 +6,7 @@ from pathlib import Path
 import polars as pl
 
 from src.download.entity import MarketBar
+from src.storage.catalog import DataCatalog
 
 
 def _bars_to_frame(bars: list[MarketBar]) -> pl.DataFrame:
@@ -30,8 +31,9 @@ def _atomic_write(path: Path, frame: pl.DataFrame) -> None:
 class ParquetStore:
     """Guarda barras en {data_dir}/{TICKER}.parquet conservando lo existente y sin duplicar."""
 
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, catalog: DataCatalog | None = None):
         self.data_dir = Path(data_dir)
+        self.catalog = catalog if catalog is not None else DataCatalog(data_dir)
 
     def _path(self, ticker: str) -> Path:
         return self.data_dir / f"{ticker.upper()}.parquet"
@@ -58,4 +60,8 @@ class ParquetStore:
             combined = new_frame.unique(subset=["datetime"], keep="first")
         combined = combined.sort("datetime")
         _atomic_write(path, combined)
-        return combined.height - before
+        added = combined.height - before
+        range_start = min(b.datetime for b in bars)
+        range_end = max(b.datetime for b in bars)
+        self.catalog.add(ticker, range_start, range_end, added)
+        return added

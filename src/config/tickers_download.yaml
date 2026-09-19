@@ -9,4 +9,8 @@
 - ticker: TRUG
   end_day: "17/09/2026"
   days: 10
+
+- ticker: TRUG
+  end_day: "06/06/2026"
+  days: 10
   

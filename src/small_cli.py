@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 
+import logging
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -14,10 +15,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.download.massive import MassiveDownloader
+from src.logger import setup_logger
+from src.storage.catalog import DataCatalog
 from src.storage.parquet_store import ParquetStore
 
 DEFAULT_FILE = PROJECT_ROOT / "src" / "config" / "tickers_download.yaml"
 DEFAULT_CONFIG = PROJECT_ROOT / "src" / "config" / "config.yaml"
+
+logger = logging.getLogger("smallcaps")
 
 
 def validate_requests(data):
@@ -61,11 +66,14 @@ def load_requests(path):
 
 def load_config(path):
     config = load_yaml(path)
-    if not isinstance(config, dict) or set(config) != {"data_dir", "provider", "package_days"}:
-        raise ValueError("La configuración debe contener exactamente data_dir, provider y package_days.")
+    if not isinstance(config, dict) or set(config) != {"data_dir", "dir_log", "provider", "package_days"}:
+        raise ValueError("La configuración debe contener exactamente data_dir, dir_log, provider y package_days.")
     data_dir = config["data_dir"]
     if not isinstance(data_dir, str) or not data_dir.strip():
         raise ValueError("data_dir debe ser una ruta de directorio no vacía.")
+    dir_log = config["dir_log"]
+    if not isinstance(dir_log, str) or not dir_log.strip():
+        raise ValueError("dir_log debe ser una ruta de directorio no vacía.")
     provider = config["provider"]
     if not isinstance(provider, str) or provider not in ("cs", "massive", "ib"):
         raise ValueError("provider debe ser cs, massive o ib.")
@@ -75,7 +83,15 @@ def load_config(path):
     destination = Path(data_dir)
     if not destination.is_absolute():
         destination = PROJECT_ROOT / destination
-    return {"data_dir": destination.resolve(), "provider": provider, "package_days": package_days}
+    log_destination = Path(dir_log)
+    if not log_destination.is_absolute():
+        log_destination = PROJECT_ROOT / log_destination
+    return {
+        "data_dir": destination.resolve(),
+        "dir_log": log_destination.resolve(),
+        "provider": provider,
+        "package_days": package_days,
+    }
 
 
 def check_data_dir(path):
@@ -125,10 +141,21 @@ def download_massive(config, requests):
                 bars = downloader.download(ticker, package_start, package_end)
                 added += store.save(ticker, bars)
         except Exception as exc:  # el CLI reporta el error y no crashea
-            print(f"Error descargando {ticker}: {exc}", file=sys.stderr)
+            logger.error(f"Error descargando {ticker}: {exc}")
             return 1
-        print(f"{ticker} | antes: {before} | nuevas: {added} | total: {before + added}")
-    print("Descarga completada.")
+        logger.info(f"{ticker} | antes: {before} | nuevas: {added} | total: {before + added}")
+    logger.info("Descarga completada.")
+    return 0
+
+
+def show_catalog(data_dir):
+    """Muestra el catálogo de tickers y períodos disponibles."""
+    catalog = DataCatalog(data_dir)
+    df = catalog.as_dataframe()
+    if df.height == 0:
+        print("Catálogo vacío. No hay datos registrados.")
+        return 0
+    print(df)
     return 0
 
 
@@ -138,10 +165,24 @@ def main(argv=None):
     download = commands.add_parser("download", help="Descargar barras 1m de los tickers solicitados.")
     download.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="Configuración YAML.")
     download.add_argument("--tickers", type=Path, default=DEFAULT_FILE, help="Lista de tickers YAML.")
+
+    catalog_cmd = commands.add_parser("catalog", help="Mostrar el catálogo de datos disponibles.")
+    catalog_cmd.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="Configuración YAML.")
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
         return 0
+
+    if args.command == "catalog":
+        try:
+            config = load_config(args.config)
+            check_data_dir(config["data_dir"])
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        return show_catalog(config["data_dir"])
+
     try:
         config = load_config(args.config)
         requests = load_requests(args.tickers)
@@ -150,15 +191,17 @@ def main(argv=None):
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Proveedor: {config['provider']}")
-    print(f"Directorio disponible: {config['data_dir']}")
-    print(f"Solicitudes válidas: {len(requests)}")
+    setup_logger(config["dir_log"])
+
+    logger.info(f"Proveedor: {config['provider']}")
+    logger.info(f"Directorio de datos: {config['data_dir']}")
+    logger.info(f"Solicitudes válidas: {len(requests)}")
 
     if config["provider"] != "massive":
         for item in requests:
-            print(f"{item['ticker']} | end_day: {item['end_day']} | days: {item['days']}")
-        print(f"El proveedor {config['provider']} aún no está implementado.")
-        print("No se han descargado datos.")
+            logger.info(f"{item['ticker']} | end_day: {item['end_day']} | days: {item['days']}")
+        logger.warning(f"El proveedor {config['provider']} aún no está implementado.")
+        logger.info("No se han descargado datos.")
         return 0
 
     return download_massive(config, requests)

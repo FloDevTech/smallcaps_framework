@@ -36,6 +36,8 @@ Estos son objetivos del proyecto, no capacidades ya implementadas ni resultados 
 | Interfaz común DataDownloader | Implementado |
 | Archivo del proveedor Massive | Implementado (REST 1m) |
 | Descarga incremental y almacenamiento Parquet | Implementado (solo massive) |
+| Catálogo de datos por ticker y período | Implementado |
+| Logging persistente con rotación | Implementado |
 | Minería, outcomes, backtesting y alertas | Pendiente |
 
 ## Inicio rápido — Windows / PowerShell
@@ -55,6 +57,7 @@ Edita `src/config/config.yaml` con una carpeta existente y accesible:
 
 ```yaml
 data_dir: data
+dir_log: data  # directorio para archivos de log
 provider: massive  # cs: Charles Schwab; massive: Massive; ib: Interactive Brokers
 package_days: 10   # descarga en paquetes de N días
 ```
@@ -91,6 +94,14 @@ Edita `src/config/tickers_download.yaml`:
 
 Con `provider: massive`, el comando descarga las barras 1m de cada ticker en `data_dir/{TICKER}.parquet`, dividiendo el rango en paquetes de `package_days` días y de forma incremental: conserva lo ya descargado y agrega solo las barras faltantes. Requiere la variable `MASSIVE_API_KEY`. Con otro proveedor, valida la configuración e indica que la descarga aún no está implementada.
 
+Para consultar qué datos están disponibles:
+
+```powershell
+.\venv\Scripts\python.exe src\small_cli.py catalog
+```
+
+Muestra el catálogo con cada descarga registrada: ticker, período descargado (start/end), cantidad de barras y timestamp. El mismo ticker puede aparecer en múltiples filas si se descargó en períodos no contiguos.
+
 Para indicar otros archivos:
 
 ```powershell
@@ -104,15 +115,17 @@ Sin comando muestra ayuda. Los errores de validación terminan con código disti
 ```text
 src/
 ├── small_cli.py
+├── logger.py            # Configuración de logging persistente
 ├── config/
 │   ├── config.yaml
 │   └── tickers_download.yaml
 ├── download/
-│   ├── entity.py       # Entidad MarketBar
-│   ├── interface.py    # Contrato y validación común
-│   └── massive.py      # Proveedor Massive (REST)
+│   ├── entity.py        # Entidad MarketBar
+│   ├── interface.py     # Contrato y validación común
+│   └── massive.py       # Proveedor Massive (REST)
 └── storage/
-    └── parquet_store.py # Almacenamiento Parquet por ticker
+    ├── parquet_store.py # Almacenamiento Parquet por ticker
+    └── catalog.py       # Catálogo de datos descargados
 tests/                 # Pruebas sin conexión a proveedores
 openspec/              # Flujo SDD: config, specs y changes
 specs/                 # Especificaciones históricas (funciones cerradas)
@@ -142,6 +155,34 @@ El spread ausente no se sustituye por cero ni se deduce de OHLC. `transactions` 
 Las barras se guardan en **Parquet local con Polars**, un archivo por ticker en `data_dir/{TICKER}.parquet`. La escritura es incremental: se conservan las barras existentes (deduplicación por `datetime`) y se agregan solo las faltantes, con escritura atómica. DynamoDB se evaluaría si apareciera una necesidad concreta de consultas operativas compartidas en AWS.
 
 Referencias: [Apache Parquet](https://parquet.apache.org/docs/overview/), [lectura Parquet en Polars](https://docs.pola.rs/api/python/stable/reference/api/polars.scan_parquet.html) y [consultas y escaneos en DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-query-scan.html).
+
+## Catálogo de datos
+
+El catálogo (`data_dir/_catalog.parquet`) registra cada descarga como una fila independiente: ticker, período descargado (start/end), cantidad de barras y timestamp de la descarga. Si un mismo ticker se descarga en períodos no contiguos, aparecen múltiples filas, permitiendo ver gaps reales en los datos.
+
+El campo `bars` refleja las barras efectivamente agregadas al parquet (después de deduplicar), no el total recibido del proveedor.
+
+Ejemplo de catálogo con descargas no contiguas:
+
+```
+TRUG | 2026-05-28 10:00 → 2026-06-06 16:00 | 2800 bars
+TRUG | 2026-09-09 09:30 → 2026-09-18 16:00 | 3500 bars
+TNMG | 2026-09-09 09:30 → 2026-09-18 16:00 | 2500 bars
+```
+
+El comando `catalog` muestra este DataFrame completo para inspección.
+
+## Logging
+
+El framework registra todas las operaciones en archivos de log con rotación automática. El archivo activo es `dir_log/last.log`. Cuando supera 50 líneas, se renombra a `dir_log/YYYYMMDDHHmm.log` (con sufijo `_N` si ya existe uno con ese timestamp) y se crea un nuevo `last.log`.
+
+Formato de cada línea:
+
+```
+2026-09-19 14:30:00 | INFO | smallcaps | Descarga completada.
+```
+
+Los logs también se imprimen en consola con formato corto (`INFO: mensaje`).
 
 ## Verificación
 
