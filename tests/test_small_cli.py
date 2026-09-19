@@ -50,7 +50,7 @@ class TestSmallCli(unittest.TestCase):
     def test_default_from_another_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
-            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs"}))
+            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs", "package_days": 10}))
             result = subprocess.run(
                 [sys.executable, str(CLI), "download", "--config", str(config)],
                 cwd=directory, capture_output=True, text=True,
@@ -66,7 +66,7 @@ class TestSmallCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "requests.yaml"
             config = Path(directory) / "config.yaml"
-            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs"}))
+            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs", "package_days": 10}))
             contents = [None, "{", yaml.safe_dump([
                 {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10},
                 {"ticker": "TRUG", "end_day": "18/09/2026", "days": 0},
@@ -88,22 +88,28 @@ class TestSmallCli(unittest.TestCase):
     def test_config_validation_and_relative_path(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
-            config.write_text("data_dir: data\nprovider: massive\n", encoding="utf-8")
+            config.write_text("data_dir: data\nprovider: massive\npackage_days: 10\n", encoding="utf-8")
             self.assertEqual(load_config(config), {
-                "data_dir": (PROJECT_ROOT / "data").resolve(), "provider": "massive",
+                "data_dir": (PROJECT_ROOT / "data").resolve(), "provider": "massive", "package_days": 10,
             })
             for provider in ("cs", "massive", "ib"):
                 with self.subTest(provider=provider):
                     config.write_text(yaml.safe_dump({
-                        "data_dir": directory, "provider": provider,
+                        "data_dir": directory, "provider": provider, "package_days": 10,
                     }), encoding="utf-8")
                     self.assertEqual(load_config(config)["provider"], provider)
-            for data in [None, [], {}, {"data_dir": "data"},
-                         {"data_dir": "", "provider": "cs"},
-                         {"data_dir": 10, "provider": "cs"},
-                         {"data_dir": "data", "provider": "unknown"},
-                         {"data_dir": "data", "provider": "schwab"},
-                         {"data_dir": "data", "provider": []}]:
+            base = {"data_dir": "data", "provider": "cs", "package_days": 10}
+            for data in [None, [], {},
+                         {**base, "data_dir": ""},
+                         {**base, "data_dir": 10},
+                         {**base, "provider": "unknown"},
+                         {**base, "provider": "schwab"},
+                         {**base, "provider": []},
+                         {**base, "package_days": 0},
+                         {**base, "package_days": -1},
+                         {**base, "package_days": 1.5},
+                         {**base, "package_days": "10"},
+                         {"data_dir": "data", "provider": "cs"}]:
                 with self.subTest(data=data):
                     config.write_text(yaml.safe_dump(data), encoding="utf-8")
                     with self.assertRaises(ValueError):
@@ -137,7 +143,7 @@ class TestSmallCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
             tickers = Path(directory) / "tickers.yaml"
-            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs"}))
+            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs", "package_days": 10}))
             tickers.write_text("[]", encoding="utf-8")
             with patch("src.small_cli.check_data_dir") as probe:
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
@@ -151,7 +157,7 @@ class TestSmallCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
             missing = Path(directory) / "missing"
-            config.write_text(yaml.safe_dump({"data_dir": str(missing), "provider": "massive"}))
+            config.write_text(yaml.safe_dump({"data_dir": str(missing), "provider": "massive", "package_days": 10}))
             result = subprocess.run(
                 [sys.executable, str(CLI), "download", "--config", str(config)],
                 capture_output=True, text=True,
@@ -175,14 +181,14 @@ class TestSmallCli(unittest.TestCase):
 
     def test_to_interval(self):
         start, end = to_interval("18/09/2026", 10)
-        self.assertEqual(end, datetime(2026, 9, 18, tzinfo=timezone.utc))
-        self.assertEqual(start, datetime(2026, 9, 8, tzinfo=timezone.utc))
+        self.assertEqual(end, datetime(2026, 9, 19, tzinfo=timezone.utc))
+        self.assertEqual(start, datetime(2026, 9, 9, tzinfo=timezone.utc))
 
     def test_massive_download_incremental(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
             tickers = Path(directory) / "tickers.yaml"
-            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "massive"}),
+            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "massive", "package_days": 10}),
                               encoding="utf-8")
             tickers.write_text(yaml.safe_dump([
                 {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10},
@@ -199,6 +205,23 @@ class TestSmallCli(unittest.TestCase):
             self.assertEqual(result, 0, out.getvalue())
             self.assertIn("nuevas: 2", out.getvalue())
             self.assertTrue((Path(directory) / "TNMG.parquet").exists())
+
+    def test_massive_download_chunks_by_package_days(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.yaml"
+            tickers = Path(directory) / "tickers.yaml"
+            config.write_text(yaml.safe_dump({
+                "data_dir": directory, "provider": "massive", "package_days": 4,
+            }), encoding="utf-8")
+            tickers.write_text(yaml.safe_dump([
+                {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10},
+            ]), encoding="utf-8")
+            with patch("src.small_cli.MassiveDownloader") as mock_cls:
+                mock_cls.return_value.download.return_value = []
+                with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()):
+                    result = main(["download", "--config", str(config), "--tickers", str(tickers)])
+            self.assertEqual(result, 0, out.getvalue())
+            self.assertEqual(mock_cls.return_value.download.call_count, 3)
 
 
 if __name__ == "__main__":

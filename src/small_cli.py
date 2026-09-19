@@ -61,18 +61,21 @@ def load_requests(path):
 
 def load_config(path):
     config = load_yaml(path)
-    if not isinstance(config, dict) or set(config) != {"data_dir", "provider"}:
-        raise ValueError("La configuración debe contener exactamente data_dir y provider.")
+    if not isinstance(config, dict) or set(config) != {"data_dir", "provider", "package_days"}:
+        raise ValueError("La configuración debe contener exactamente data_dir, provider y package_days.")
     data_dir = config["data_dir"]
     if not isinstance(data_dir, str) or not data_dir.strip():
         raise ValueError("data_dir debe ser una ruta de directorio no vacía.")
     provider = config["provider"]
     if not isinstance(provider, str) or provider not in ("cs", "massive", "ib"):
         raise ValueError("provider debe ser cs, massive o ib.")
+    package_days = config["package_days"]
+    if type(package_days) is not int or package_days <= 0:
+        raise ValueError("package_days debe ser un entero positivo.")
     destination = Path(data_dir)
     if not destination.is_absolute():
         destination = PROJECT_ROOT / destination
-    return {"data_dir": destination.resolve(), "provider": provider}
+    return {"data_dir": destination.resolve(), "provider": provider, "package_days": package_days}
 
 
 def check_data_dir(path):
@@ -90,24 +93,37 @@ def check_data_dir(path):
 
 
 def to_interval(end_day, days):
-    """Convierte end_day (DD/MM/AAAA) y days en el intervalo [start, end) en UTC."""
+    """Convierte end_day (DD/MM/AAAA) y days en [start, end) en UTC, con end_day inclusive."""
     date = datetime.strptime(end_day, "%d/%m/%Y")
-    end = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
+    end = datetime(date.year, date.month, date.day, tzinfo=timezone.utc) + timedelta(days=1)
     start = end - timedelta(days=days)
     return start, end
 
 
+def iter_packages(start, end, package_days):
+    """Divide [start, end) en sub-rangos de a lo sumo package_days días."""
+    step = timedelta(days=package_days)
+    current = start
+    while current < end:
+        next_end = min(current + step, end)
+        yield current, next_end
+        current = next_end
+
+
 def download_massive(config, requests):
-    """Descarga cada ticker de forma incremental: conserva lo existente y agrega lo faltante."""
+    """Descarga cada ticker en paquetes de package_days días, de forma incremental."""
     downloader = MassiveDownloader()
     store = ParquetStore(config["data_dir"])
+    package_days = config["package_days"]
     for item in requests:
         ticker = item["ticker"]
         start, end = to_interval(item["end_day"], item["days"])
         before = store.count(ticker)
         try:
-            bars = downloader.download(ticker, start, end)
-            added = store.save(ticker, bars)
+            added = 0
+            for package_start, package_end in iter_packages(start, end, package_days):
+                bars = downloader.download(ticker, package_start, package_end)
+                added += store.save(ticker, bars)
         except Exception as exc:  # el CLI reporta el error y no crashea
             print(f"Error descargando {ticker}: {exc}", file=sys.stderr)
             return 1
