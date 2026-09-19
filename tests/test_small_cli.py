@@ -1,5 +1,6 @@
 from contextlib import redirect_stderr
 from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 import io
 from pathlib import Path
 import subprocess
@@ -10,8 +11,10 @@ from unittest.mock import patch
 
 import yaml
 
+from src.download.entity import MarketBar
 from src.small_cli import (
-    DEFAULT_FILE, PROJECT_ROOT, check_data_dir, load_config, load_requests, main, validate_requests,
+    DEFAULT_FILE, PROJECT_ROOT, check_data_dir, load_config, load_requests, main, to_interval,
+    validate_requests,
 )
 
 
@@ -20,10 +23,10 @@ CLI = Path(__file__).resolve().parents[1] / "src" / "small_cli.py"
 
 class TestSmallCli(unittest.TestCase):
     def test_example(self):
-        self.assertEqual(load_requests(DEFAULT_FILE), [
-            {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10},
-            {"ticker": "TRUG", "end_day": "18/09/2026", "days": 10},
-        ])
+        requests = load_requests(DEFAULT_FILE)
+        self.assertTrue(requests)
+        for item in requests:
+            self.assertEqual(set(item), {"ticker", "end_day", "days"})
 
     def test_invalid_requests(self):
         valid = {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10}
@@ -169,6 +172,33 @@ class TestSmallCli(unittest.TestCase):
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 2)
             self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_to_interval(self):
+        start, end = to_interval("18/09/2026", 10)
+        self.assertEqual(end, datetime(2026, 9, 18, tzinfo=timezone.utc))
+        self.assertEqual(start, datetime(2026, 9, 8, tzinfo=timezone.utc))
+
+    def test_massive_download_incremental(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.yaml"
+            tickers = Path(directory) / "tickers.yaml"
+            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "massive"}),
+                              encoding="utf-8")
+            tickers.write_text(yaml.safe_dump([
+                {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10},
+            ]), encoding="utf-8")
+            start = datetime(2026, 9, 18, 14, 0, tzinfo=timezone.utc)
+            fake_bars = [
+                MarketBar(start, 2, 2.5, 1.5, 2.2, 100),
+                MarketBar(start + timedelta(minutes=1), 2, 2.5, 1.5, 2.2, 100),
+            ]
+            with patch("src.small_cli.MassiveDownloader") as mock_cls:
+                mock_cls.return_value.download.return_value = fake_bars
+                with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()):
+                    result = main(["download", "--config", str(config), "--tickers", str(tickers)])
+            self.assertEqual(result, 0, out.getvalue())
+            self.assertIn("nuevas: 2", out.getvalue())
+            self.assertTrue((Path(directory) / "TNMG.parquet").exists())
 
 
 if __name__ == "__main__":

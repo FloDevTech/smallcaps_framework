@@ -1,16 +1,21 @@
-"""Prepara la descarga validando configuración, solicitudes y directorio de destino."""
+"""Descarga barras 1m de los tickers solicitados, de forma incremental en Parquet."""
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 import tempfile
 
 import yaml
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.download.massive import MassiveDownloader
+from src.storage.parquet_store import ParquetStore
+
 DEFAULT_FILE = PROJECT_ROOT / "src" / "config" / "tickers_download.yaml"
 DEFAULT_CONFIG = PROJECT_ROOT / "src" / "config" / "config.yaml"
 
@@ -84,10 +89,37 @@ def check_data_dir(path):
         raise ValueError(message) from exc
 
 
+def to_interval(end_day, days):
+    """Convierte end_day (DD/MM/AAAA) y days en el intervalo [start, end) en UTC."""
+    date = datetime.strptime(end_day, "%d/%m/%Y")
+    end = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
+    start = end - timedelta(days=days)
+    return start, end
+
+
+def download_massive(config, requests):
+    """Descarga cada ticker de forma incremental: conserva lo existente y agrega lo faltante."""
+    downloader = MassiveDownloader()
+    store = ParquetStore(config["data_dir"])
+    for item in requests:
+        ticker = item["ticker"]
+        start, end = to_interval(item["end_day"], item["days"])
+        before = store.count(ticker)
+        try:
+            bars = downloader.download(ticker, start, end)
+            added = store.save(ticker, bars)
+        except Exception as exc:  # el CLI reporta el error y no crashea
+            print(f"Error descargando {ticker}: {exc}", file=sys.stderr)
+            return 1
+        print(f"{ticker} | antes: {before} | nuevas: {added} | total: {before + added}")
+    print("Descarga completada.")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command")
-    download = commands.add_parser("download", help="Validar solicitudes y destino de descarga.")
+    download = commands.add_parser("download", help="Descargar barras 1m de los tickers solicitados.")
     download.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="Configuración YAML.")
     download.add_argument("--tickers", type=Path, default=DEFAULT_FILE, help="Lista de tickers YAML.")
     args = parser.parse_args(argv)
@@ -105,11 +137,15 @@ def main(argv=None):
     print(f"Proveedor: {config['provider']}")
     print(f"Directorio disponible: {config['data_dir']}")
     print(f"Solicitudes válidas: {len(requests)}")
-    for item in requests:
-        print(f"{item['ticker']} | end_day: {item['end_day']} | days: {item['days']}")
-    print("Preparación completada. La descarga del proveedor aún no está implementada.")
-    print("No se han descargado datos.")
-    return 0
+
+    if config["provider"] != "massive":
+        for item in requests:
+            print(f"{item['ticker']} | end_day: {item['end_day']} | days: {item['days']}")
+        print(f"El proveedor {config['provider']} aún no está implementado.")
+        print("No se han descargado datos.")
+        return 0
+
+    return download_massive(config, requests)
 
 
 if __name__ == "__main__":
