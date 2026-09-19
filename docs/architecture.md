@@ -14,7 +14,7 @@ Los requisitos de cada función viven en su especificación; el contexto histór
 - No añadir un sistema de configuración hasta que exista una necesidad aprobada.
 
 ## Estado
-El comando download valida configuración, solicitudes y destino, y con `provider: massive` descarga barras 1m de forma incremental en Parquet (un archivo por ticker). Los proveedores cs e ib todavía no tienen conector.
+El comando download valida configuración, solicitudes y destino, y con `provider: massive` descarga barras 1m en Parquet (un archivo por ticker), dividiendo el rango en paquetes de `package_days` días y de forma incremental. Los proveedores cs e ib todavía no tienen conector.
 
 ## Entrada de solicitudes
 - `src/config/tickers_download.yaml`: lista de objetos con ticker, end_day (DD/MM/AAAA) y days (entero positivo). Sustituye al JSON original.
@@ -32,7 +32,7 @@ El comando download valida configuración, solicitudes y destino, y con `provide
 Por petición del usuario, cada módulo se organiza con entidad, interfaz e implementaciones en archivos separados. Añadir las implementaciones cuando se desarrolle su comportamiento.
 
 ## Núcleo de descarga
-- `src/download/entity.py`: MarketBar, entidad inmutable con datetime, open, high, low, close, volume, spread, vwap y transactions. spread, vwap y transactions son opcionales (None).
+- `src/download/entity.py`: MarketBar, entidad inmutable con datetime, open, high, low, close, volume, spread y transactions. spread y transactions son opcionales (None).
 - datetime identifica el inicio de la barra 1m y requiere zona horaria. Precios y spread se expresan en unidades de precio; volume es un entero no negativo.
 - spread = ask − bid; None significa dato no disponible, cero es un valor real. No se calcula a partir de OHLC ni se rellena artificialmente.
 - `src/download/interface.py`: DataDownloader es la clase abstracta común. download(ticker, start, end) valida y llama a _download, implementado por cada proveedor.
@@ -42,7 +42,7 @@ Por petición del usuario, cada módulo se organiza con entidad, interfaz e impl
 - Contrato y evidencia: `specs/contrato_descarga.md`. Sin dependencias nuevas.
 
 ## Proveedor Massive
-`src/download/massive.py` implementa `MassiveDownloader` vía la API REST de Massive (ex-Polygon): `GET /v2/aggs/ticker/{T}/range/1/minute/{from}/{to}`, con auth `Authorization: Bearer` desde `MASSIVE_API_KEY`. Descarga con `adjusted=false` (precios crudos), paginación por `next_url` y timestamps normalizados a UTC. `vwap` y `transactions` se mapean cuando el proveedor los entrega; `spread` queda None (este endpoint no da bid/ask).
+`src/download/massive.py` implementa `MassiveDownloader` vía la API REST de Massive (ex-Polygon): `GET /v2/aggs/ticker/{T}/range/1/minute/{from}/{to}`, con auth `Authorization: Bearer` desde `MASSIVE_API_KEY`. Descarga con `adjusted=false` (precios crudos), paginación por `next_url` y timestamps normalizados a UTC. `transactions` se mapea cuando el proveedor lo entrega; `spread` queda None (este endpoint no da bid/ask).
 
 ## Almacenamiento
 Parquet local con Polars, un archivo por ticker en `data_dir/{TICKER}.parquet`. La escritura es incremental: merge con lo existente, deduplicación por `datetime` y escritura atómica, para no pisar barras ya descargadas. DynamoDB se consideraría ante una necesidad de consultas operativas en AWS; no se incorpora en esta fase.

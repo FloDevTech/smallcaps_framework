@@ -56,6 +56,7 @@ Edita `src/config/config.yaml` con una carpeta existente y accesible:
 ```yaml
 data_dir: data
 provider: massive  # cs: Charles Schwab; massive: Massive; ib: Interactive Brokers
+package_days: 10   # descarga en paquetes de N días
 ```
 
 Las rutas relativas parten de la raíz del proyecto. También se admiten rutas absolutas. Para usar el ejemplo local, crea la carpeta una sola vez:
@@ -88,7 +89,7 @@ Edita `src/config/tickers_download.yaml`:
 .\venv\Scripts\python.exe src\small_cli.py download
 ```
 
-Con `provider: massive`, el comando descarga las barras 1m de cada ticker en `data_dir/{TICKER}.parquet`, de forma incremental: conserva lo ya descargado y agrega solo las barras faltantes. Requiere la variable `MASSIVE_API_KEY`. Con otro proveedor, valida la configuración e indica que la descarga aún no está implementada.
+Con `provider: massive`, el comando descarga las barras 1m de cada ticker en `data_dir/{TICKER}.parquet`, dividiendo el rango en paquetes de `package_days` días y de forma incremental: conserva lo ya descargado y agrega solo las barras faltantes. Requiere la variable `MASSIVE_API_KEY`. Con otro proveedor, valida la configuración e indica que la descarga aún no está implementada.
 
 Para indicar otros archivos:
 
@@ -130,12 +131,11 @@ Cada módulo separa **entidad, interfaz e implementaciones**. Se añaden compone
 | open, high, low, close | Precios OHLC |
 | volume | Volumen entero no negativo |
 | spread | ask − bid en unidades de precio; None si no está disponible |
-| vwap | Precio medio ponderado por volumen; None si no está disponible |
 | transactions | Número de transacciones de la barra; None si no está disponible |
 
 Los proveedores heredan `DataDownloader` e implementan `_download(ticker, start, end)`. El método público `download` valida entradas y resultados: devuelve una lista de `MarketBar`, ordenada, sin duplicados y dentro del intervalo **`[start, end)`**.
 
-El spread ausente no se sustituye por cero ni se deduce de OHLC. `vwap` y `transactions` son opcionales: se llenan cuando el proveedor los entrega (Massive los entrega). Un error del proveedor tampoco se convierte en una lista vacía.
+El spread ausente no se sustituye por cero ni se deduce de OHLC. `transactions` es opcional: se llena cuando el proveedor lo entrega (Massive lo entrega). Un error del proveedor tampoco se convierte en una lista vacía.
 
 ## Almacenamiento
 
