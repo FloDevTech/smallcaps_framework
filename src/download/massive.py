@@ -59,7 +59,6 @@ class MassiveDownloader(DataDownloader):
     def _to_bars(self, results: list) -> list[MarketBar]:
         bars = []
         for item in results:
-            vwap = item.get("vw")
             transactions = item.get("n")
             bars.append(MarketBar(
                 datetime=datetime.fromtimestamp(item["t"] / 1000, tz=timezone.utc),
@@ -68,7 +67,6 @@ class MassiveDownloader(DataDownloader):
                 low=float(item["l"]),
                 close=float(item["c"]),
                 volume=int(item["v"]),
-                vwap=float(vwap) if vwap is not None else None,
                 transactions=int(transactions) if transactions is not None else None,
             ))
         return bars

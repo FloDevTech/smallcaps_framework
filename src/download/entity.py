@@ -9,7 +9,7 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class MarketBar:
-    """datetime marca el inicio con zona; spread, vwap y transactions son opcionales (None)."""
+    """datetime marca el inicio con zona; spread y transactions son opcionales (None)."""
 
     datetime: DateTime
     open: float
@@ -18,7 +18,6 @@ class MarketBar:
     close: float
     volume: int
     spread: Optional[float] = None
-    vwap: Optional[float] = None
     transactions: Optional[int] = None
 
     def __post_init__(self):
@@ -36,9 +35,6 @@ class MarketBar:
             raise ValueError("open y close deben estar entre low y high.")
         if type(self.volume) is not int or self.volume < 0:
             raise ValueError("volume debe ser un entero no negativo.")
-        if self.vwap is not None:
-            if type(self.vwap) not in (int, float) or not isfinite(self.vwap) or self.vwap <= 0:
-                raise ValueError("vwap debe ser un número positivo o None.")
         if self.transactions is not None:
             if type(self.transactions) is not int or self.transactions < 0:
                 raise ValueError("transactions debe ser un entero no negativo o None.")

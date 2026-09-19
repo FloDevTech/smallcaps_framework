@@ -9,10 +9,8 @@ from src.download.interface import DataDownloader
 from src.download.massive import MassiveDownloader
 
 
-def _bar(timestamp, o=2.0, h=2.5, l=1.5, c=2.2, v=100, vw=2.1, n=3):
+def _bar(timestamp, o=2.0, h=2.5, l=1.5, c=2.2, v=100, n=3):
     payload = {"t": timestamp, "o": o, "h": h, "l": l, "c": c, "v": v}
-    if vw is not None:
-        payload["vw"] = vw
     if n is not None:
         payload["n"] = n
     return payload
@@ -46,7 +44,7 @@ class TestMassiveDownloader(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "MASSIVE_API_KEY"):
                 downloader.download("TNMG", self.start, self.start + timedelta(minutes=1))
 
-    def test_maps_bars_including_vwap_and_transactions(self):
+    def test_maps_bars_including_transactions(self):
         payload = {"results": [_bar(self._ts(0))], "next_url": None}
         with patch("src.download.massive.urllib.request.urlopen") as urlopen:
             urlopen.return_value.__enter__.return_value = _json_response(payload)
@@ -54,16 +52,14 @@ class TestMassiveDownloader(unittest.TestCase):
         self.assertEqual(len(bars), 1)
         bar = bars[0]
         self.assertIsInstance(bar, MarketBar)
-        self.assertEqual(bar.vwap, 2.1)
         self.assertEqual(bar.transactions, 3)
         self.assertIsNone(bar.spread)
 
-    def test_absent_vwap_and_transactions_become_none(self):
-        payload = {"results": [_bar(self._ts(0), vw=None, n=None)], "next_url": None}
+    def test_absent_transactions_becomes_none(self):
+        payload = {"results": [_bar(self._ts(0), n=None)], "next_url": None}
         with patch("src.download.massive.urllib.request.urlopen") as urlopen:
             urlopen.return_value.__enter__.return_value = _json_response(payload)
             bars = self.downloader.download("TNMG", self.start, self.start + timedelta(minutes=2))
-        self.assertIsNone(bars[0].vwap)
         self.assertIsNone(bars[0].transactions)
 
     def test_pagination_follows_next_url(self):

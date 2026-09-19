@@ -14,7 +14,7 @@ class TestMarketBar(unittest.TestCase):
 
     def test_fields_spread_absent_zero_and_positive(self):
         self.assertEqual([field.name for field in fields(MarketBar)], [
-            "datetime", "open", "high", "low", "close", "volume", "spread", "vwap", "transactions",
+            "datetime", "open", "high", "low", "close", "volume", "spread", "transactions",
         ])
         self.assertIsNone(MarketBar(**self.values).spread)
         self.assertEqual(MarketBar(**self.values, spread=0).spread, 0)
@@ -29,7 +29,6 @@ class TestMarketBar(unittest.TestCase):
             "close": [float("nan"), float("inf"), 4.0],
             "volume": [-1, 1.5, True, None],
             "spread": [-0.1, float("nan"), float("inf"), True, "0.1"],
-            "vwap": [0, -1, float("nan"), float("inf"), True, "2"],
             "transactions": [-1, 1.5, True, "2"],
         }
         for name, values in cases.items():
@@ -42,11 +41,9 @@ class TestMarketBar(unittest.TestCase):
                            "close": 2, "volume": 0})
         self.assertEqual(bar.volume, 0)
 
-    def test_vwap_and_transactions_optional_and_valid(self):
-        self.assertIsNone(MarketBar(**self.values).vwap)
+    def test_transactions_optional_and_valid(self):
         self.assertIsNone(MarketBar(**self.values).transactions)
-        bar = MarketBar(**self.values, vwap=2.1, transactions=3)
-        self.assertEqual(bar.vwap, 2.1)
+        bar = MarketBar(**self.values, transactions=3)
         self.assertEqual(bar.transactions, 3)
 
     def test_values_cannot_change_after_validation(self):

@@ -17,7 +17,6 @@ def _bars_to_frame(bars: list[MarketBar]) -> pl.DataFrame:
         "close": pl.Series([bar.close for bar in bars], dtype=pl.Float64),
         "volume": pl.Series([bar.volume for bar in bars], dtype=pl.Int64),
         "spread": pl.Series([bar.spread for bar in bars], dtype=pl.Float64),
-        "vwap": pl.Series([bar.vwap for bar in bars], dtype=pl.Float64),
         "transactions": pl.Series([bar.transactions for bar in bars], dtype=pl.Int64),
     })
 

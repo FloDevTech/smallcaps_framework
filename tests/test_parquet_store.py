@@ -41,11 +41,10 @@ class TestParquetStore(unittest.TestCase):
         self.assertEqual(self.store.count("TNMG"), 3)
 
     def test_save_preserves_existing_values(self):
-        self.store.save("TNMG", [bar(self.start, vwap=2.1, transactions=3)])
-        self.assertEqual(self.store.save("TNMG", [bar(self.start, vwap=9.9, transactions=99)]), 0)
+        self.store.save("TNMG", [bar(self.start, transactions=3)])
+        self.assertEqual(self.store.save("TNMG", [bar(self.start, transactions=99)]), 0)
         frame = pl.read_parquet(self.store._path("TNMG"))
         self.assertEqual(frame.height, 1)
-        self.assertEqual(frame["vwap"][0], 2.1)
         self.assertEqual(frame["transactions"][0], 3)
 
     def test_save_empty_bars_is_noop(self):
@@ -61,14 +60,12 @@ class TestParquetStore(unittest.TestCase):
     def test_roundtrip_optional_fields(self):
         self.store.save("TNMG", [
             bar(self.start),
-            bar(self.start + timedelta(minutes=1), spread=0.02, vwap=2.1, transactions=3),
+            bar(self.start + timedelta(minutes=1), spread=0.02, transactions=3),
         ])
         frame = pl.read_parquet(self.store._path("TNMG"))
         self.assertIsNone(frame["spread"][0])
-        self.assertIsNone(frame["vwap"][0])
         self.assertIsNone(frame["transactions"][0])
         self.assertEqual(frame["spread"][1], 0.02)
-        self.assertEqual(frame["vwap"][1], 2.1)
         self.assertEqual(frame["transactions"][1], 3)
 
     def test_ticker_path_is_uppercased(self):
