@@ -3,4 +3,5 @@ data_dir: E:\smallcaps_data
 dir_log: E:\smallcaps_data\logs
 provider: massive #cs =  charles schwab, massive =  massive , ib = iteractive broke
 package_days: 30
+request_delay: 20
 

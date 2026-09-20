@@ -39,8 +39,8 @@ class TestMassiveDownloader(unittest.TestCase):
             self.downloader.download("", self.start, self.start + timedelta(minutes=1))
 
     def test_missing_api_key_raises(self):
-        downloader = MassiveDownloader(api_key=None)
         with patch.dict("os.environ", {}, clear=True):
+            downloader = MassiveDownloader(api_key=None)
             with self.assertRaisesRegex(RuntimeError, "MASSIVE_API_KEY"):
                 downloader.download("TNMG", self.start, self.start + timedelta(minutes=1))
 
@@ -86,6 +86,37 @@ class TestMassiveDownloader(unittest.TestCase):
         self.assertIn("adjusted=false", url)
         self.assertIn("sort=asc", url)
         self.assertIn("limit=50000", url)
+
+    def test_request_delay_sleeps_before_each_request(self):
+        downloader = MassiveDownloader(api_key="test-key", request_delay=5)
+        payload = {"results": [_bar(self._ts(0))], "next_url": None}
+        with patch("src.download.massive.urllib.request.urlopen") as urlopen, \
+             patch("src.download.massive.time.sleep") as sleep:
+            urlopen.return_value.__enter__.return_value = _json_response(payload)
+            downloader.download("TNMG", self.start, self.start + timedelta(minutes=2))
+            sleep.assert_called_once_with(5)
+
+    def test_request_delay_zero_does_not_sleep(self):
+        downloader = MassiveDownloader(api_key="test-key", request_delay=0)
+        payload = {"results": [_bar(self._ts(0))], "next_url": None}
+        with patch("src.download.massive.urllib.request.urlopen") as urlopen, \
+             patch("src.download.massive.time.sleep") as sleep:
+            urlopen.return_value.__enter__.return_value = _json_response(payload)
+            downloader.download("TNMG", self.start, self.start + timedelta(minutes=2))
+            sleep.assert_not_called()
+
+    def test_request_delay_sleeps_on_every_page(self):
+        downloader = MassiveDownloader(api_key="test-key", request_delay=5)
+        page1 = {"results": [_bar(self._ts(0))], "next_url": "https://api.massive.com/next?cursor=x"}
+        page2 = {"results": [_bar(self._ts(1))], "next_url": None}
+        with patch("src.download.massive.urllib.request.urlopen") as urlopen, \
+             patch("src.download.massive.time.sleep") as sleep:
+            urlopen.return_value.__enter__.side_effect = [
+                _json_response(page1), _json_response(page2),
+            ]
+            downloader.download("TNMG", self.start, self.start + timedelta(minutes=3))
+            self.assertEqual(sleep.call_count, 2)
+            sleep.assert_called_with(5)
 
 
 if __name__ == "__main__":

@@ -66,8 +66,8 @@ def load_requests(path):
 
 def load_config(path):
     config = load_yaml(path)
-    if not isinstance(config, dict) or set(config) != {"data_dir", "dir_log", "provider", "package_days"}:
-        raise ValueError("La configuración debe contener exactamente data_dir, dir_log, provider y package_days.")
+    if not isinstance(config, dict) or set(config) != {"data_dir", "dir_log", "provider", "package_days", "request_delay"}:
+        raise ValueError("La configuración debe contener exactamente data_dir, dir_log, provider, package_days y request_delay.")
     data_dir = config["data_dir"]
     if not isinstance(data_dir, str) or not data_dir.strip():
         raise ValueError("data_dir debe ser una ruta de directorio no vacía.")
@@ -80,6 +80,9 @@ def load_config(path):
     package_days = config["package_days"]
     if type(package_days) is not int or package_days <= 0:
         raise ValueError("package_days debe ser un entero positivo.")
+    request_delay = config["request_delay"]
+    if not isinstance(request_delay, (int, float)) or isinstance(request_delay, bool) or request_delay < 0:
+        raise ValueError("request_delay debe ser un número mayor o igual a 0.")
     destination = Path(data_dir)
     if not destination.is_absolute():
         destination = PROJECT_ROOT / destination
@@ -91,6 +94,7 @@ def load_config(path):
         "dir_log": log_destination.resolve(),
         "provider": provider,
         "package_days": package_days,
+        "request_delay": float(request_delay),
     }
 
 
@@ -128,7 +132,7 @@ def iter_packages(start, end, package_days):
 
 def download_massive(config, requests):
     """Descarga cada ticker en paquetes de package_days días, de forma incremental."""
-    downloader = MassiveDownloader()
+    downloader = MassiveDownloader(request_delay=config["request_delay"])
     store = ParquetStore(config["data_dir"])
     package_days = config["package_days"]
     for item in requests:

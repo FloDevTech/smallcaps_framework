@@ -2,6 +2,7 @@ from contextlib import redirect_stderr
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 import io
+import logging
 from pathlib import Path
 import subprocess
 import sys
@@ -22,6 +23,17 @@ CLI = Path(__file__).resolve().parents[1] / "src" / "small_cli.py"
 
 
 class TestSmallCli(unittest.TestCase):
+    def setUp(self):
+        logger = logging.getLogger("smallcaps")
+        for handler in logger.handlers[:]:
+            handler.close()
+            logger.removeHandler(handler)
+
+    def tearDown(self):
+        logger = logging.getLogger("smallcaps")
+        for handler in logger.handlers[:]:
+            handler.close()
+            logger.removeHandler(handler)
     def test_example(self):
         requests = load_requests(DEFAULT_FILE)
         self.assertTrue(requests)
@@ -50,23 +62,30 @@ class TestSmallCli(unittest.TestCase):
     def test_default_from_another_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
-            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs", "package_days": 10}))
+            logs = Path(directory) / "logs"
+            config.write_text(yaml.safe_dump({
+                "data_dir": directory, "dir_log": str(logs), "provider": "cs",
+                "package_days": 10, "request_delay": 20,
+            }))
             result = subprocess.run(
                 [sys.executable, str(CLI), "download", "--config", str(config)],
                 cwd=directory, capture_output=True, text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("TNMG", result.stdout)
-            self.assertIn("TRUG", result.stdout)
-            self.assertIn("cs", result.stdout)
-            self.assertIn("No se han descargado datos", result.stdout)
-            self.assertEqual(list(Path(directory).iterdir()), [config])
+            self.assertIn("TNMG", result.stderr)
+            self.assertIn("TRUG", result.stderr)
+            self.assertIn("cs", result.stderr)
+            self.assertIn("No se han descargado datos", result.stderr)
+            self.assertEqual(set(Path(directory).iterdir()), {logs, config})
 
     def test_file_errors_and_no_partial_success(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "requests.yaml"
             config = Path(directory) / "config.yaml"
-            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs", "package_days": 10}))
+            config.write_text(yaml.safe_dump({
+                "data_dir": directory, "dir_log": directory, "provider": "cs",
+                "package_days": 10, "request_delay": 20,
+            }))
             contents = [None, "{", yaml.safe_dump([
                 {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10},
                 {"ticker": "TRUG", "end_day": "18/09/2026", "days": 0},
@@ -88,17 +107,23 @@ class TestSmallCli(unittest.TestCase):
     def test_config_validation_and_relative_path(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
-            config.write_text("data_dir: data\nprovider: massive\npackage_days: 10\n", encoding="utf-8")
+            config.write_text(
+                "data_dir: data\ndir_log: data\nprovider: massive\npackage_days: 10\nrequest_delay: 20\n",
+                encoding="utf-8",
+            )
             self.assertEqual(load_config(config), {
-                "data_dir": (PROJECT_ROOT / "data").resolve(), "provider": "massive", "package_days": 10,
+                "data_dir": (PROJECT_ROOT / "data").resolve(),
+                "dir_log": (PROJECT_ROOT / "data").resolve(),
+                "provider": "massive", "package_days": 10, "request_delay": 20.0,
             })
             for provider in ("cs", "massive", "ib"):
                 with self.subTest(provider=provider):
                     config.write_text(yaml.safe_dump({
-                        "data_dir": directory, "provider": provider, "package_days": 10,
+                        "data_dir": directory, "dir_log": directory, "provider": provider,
+                        "package_days": 10, "request_delay": 20,
                     }), encoding="utf-8")
                     self.assertEqual(load_config(config)["provider"], provider)
-            base = {"data_dir": "data", "provider": "cs", "package_days": 10}
+            base = {"data_dir": "data", "dir_log": "data", "provider": "cs", "package_days": 10, "request_delay": 20}
             for data in [None, [], {},
                          {**base, "data_dir": ""},
                          {**base, "data_dir": 10},
@@ -109,7 +134,10 @@ class TestSmallCli(unittest.TestCase):
                          {**base, "package_days": -1},
                          {**base, "package_days": 1.5},
                          {**base, "package_days": "10"},
-                         {"data_dir": "data", "provider": "cs"}]:
+                         {**base, "request_delay": -1},
+                         {**base, "request_delay": "20"},
+                         {**base, "request_delay": True},
+                         {"data_dir": "data", "dir_log": "data", "provider": "cs"}]:
                 with self.subTest(data=data):
                     config.write_text(yaml.safe_dump(data), encoding="utf-8")
                     with self.assertRaises(ValueError):
@@ -143,7 +171,10 @@ class TestSmallCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
             tickers = Path(directory) / "tickers.yaml"
-            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "cs", "package_days": 10}))
+            config.write_text(yaml.safe_dump({
+                "data_dir": directory, "dir_log": directory, "provider": "cs",
+                "package_days": 10, "request_delay": 20,
+            }))
             tickers.write_text("[]", encoding="utf-8")
             with patch("src.small_cli.check_data_dir") as probe:
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
@@ -157,7 +188,10 @@ class TestSmallCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
             missing = Path(directory) / "missing"
-            config.write_text(yaml.safe_dump({"data_dir": str(missing), "provider": "massive", "package_days": 10}))
+            config.write_text(yaml.safe_dump({
+                "data_dir": str(missing), "dir_log": directory, "provider": "massive",
+                "package_days": 10, "request_delay": 20,
+            }))
             result = subprocess.run(
                 [sys.executable, str(CLI), "download", "--config", str(config)],
                 capture_output=True, text=True,
@@ -188,8 +222,10 @@ class TestSmallCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
             tickers = Path(directory) / "tickers.yaml"
-            config.write_text(yaml.safe_dump({"data_dir": directory, "provider": "massive", "package_days": 10}),
-                              encoding="utf-8")
+            config.write_text(yaml.safe_dump({
+                "data_dir": directory, "dir_log": directory, "provider": "massive",
+                "package_days": 10, "request_delay": 20,
+            }), encoding="utf-8")
             tickers.write_text(yaml.safe_dump([
                 {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10},
             ]), encoding="utf-8")
@@ -200,28 +236,39 @@ class TestSmallCli(unittest.TestCase):
             ]
             with patch("src.small_cli.MassiveDownloader") as mock_cls:
                 mock_cls.return_value.download.return_value = fake_bars
-                with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()):
+                err = io.StringIO()
+                with redirect_stdout(io.StringIO()), redirect_stderr(err):
                     result = main(["download", "--config", str(config), "--tickers", str(tickers)])
-            self.assertEqual(result, 0, out.getvalue())
-            self.assertIn("nuevas: 2", out.getvalue())
+            self.assertEqual(result, 0, err.getvalue())
+            self.assertIn("nuevas: 2", err.getvalue())
             self.assertTrue((Path(directory) / "TNMG.parquet").exists())
+            logger = logging.getLogger("smallcaps")
+            for handler in logger.handlers[:]:
+                handler.close()
+                logger.removeHandler(handler)
 
     def test_massive_download_chunks_by_package_days(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.yaml"
             tickers = Path(directory) / "tickers.yaml"
             config.write_text(yaml.safe_dump({
-                "data_dir": directory, "provider": "massive", "package_days": 4,
+                "data_dir": directory, "dir_log": directory, "provider": "massive",
+                "package_days": 4, "request_delay": 20,
             }), encoding="utf-8")
             tickers.write_text(yaml.safe_dump([
                 {"ticker": "TNMG", "end_day": "18/09/2026", "days": 10},
             ]), encoding="utf-8")
             with patch("src.small_cli.MassiveDownloader") as mock_cls:
                 mock_cls.return_value.download.return_value = []
-                with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()):
+                err = io.StringIO()
+                with redirect_stdout(io.StringIO()), redirect_stderr(err):
                     result = main(["download", "--config", str(config), "--tickers", str(tickers)])
-            self.assertEqual(result, 0, out.getvalue())
+            self.assertEqual(result, 0, err.getvalue())
             self.assertEqual(mock_cls.return_value.download.call_count, 3)
+            logger = logging.getLogger("smallcaps")
+            for handler in logger.handlers[:]:
+                handler.close()
+                logger.removeHandler(handler)
 
 
 if __name__ == "__main__":

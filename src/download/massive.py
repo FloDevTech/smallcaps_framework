@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import os
+import time
 from typing import Optional
 import urllib.error
 import urllib.parse
@@ -19,10 +20,12 @@ BASE_URL = "https://api.massive.com"
 class MassiveDownloader(DataDownloader):
     """Descarga agregados 1m de stocks desde la API REST de Massive (ex-Polygon)."""
 
-    def __init__(self, api_key: Optional[str] = None, adjusted: bool = False, timeout: float = 30.0):
+    def __init__(self, api_key: Optional[str] = None, adjusted: bool = False, timeout: float = 30.0,
+                 request_delay: float = 0.0):
         self.api_key = api_key if api_key is not None else os.environ.get("MASSIVE_API_KEY")
         self.adjusted = adjusted
         self.timeout = timeout
+        self.request_delay = request_delay
 
     def _download(self, ticker: str, start: datetime, end: datetime) -> list[MarketBar]:
         if not self.api_key:
@@ -47,6 +50,8 @@ class MassiveDownloader(DataDownloader):
         return f"{BASE_URL}/v2/aggs/ticker/{encoded}/range/1/minute/{from_ms}/{to_ms}?{query}"
 
     def _get_json(self, url: str) -> dict:
+        if self.request_delay > 0:
+            time.sleep(self.request_delay)
         request = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.api_key}"})
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
