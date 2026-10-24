@@ -1,16 +1,265 @@
-- ticker: TNMG
-  end_day: "18/09/2026"
-  days: 10
+# - ticker: CAN
+#   end_day: "21/08/2026"
+#   days: 50
+# - ticker: GIPR
+#   end_day: "24/08/2026"
+#   days: 50
   
-- ticker: TRUG
-  end_day: "18/09/2026"
-  days: 10
-  
-- ticker: TRUG
-  end_day: "17/09/2026"
-  days: 10
+# - ticker: XPON
+#   end_day: "24/08/2026"
+#   days: 50
 
-- ticker: TRUG
-  end_day: "06/06/2026"
-  days: 10
-  
+# - ticker: AIXI
+#   end_day: "28/08/2026"
+#   days: 50
+
+# - ticker: GIPR
+#   end_day: "25/08/2026"
+  # days: 50
+# - ticker: SOAR
+#   end_day: "26/08/2026"
+  # days: 50
+# - ticker: CYAB
+#   end_day: "28/08/2026"
+#   days: 50
+# - ticker: XTNT
+#   end_day: "28/08/2026"
+#   days: 50
+# - ticker: CHAI
+#   end_day: "28/08/2026"
+#   days: 50
+# - ticker: CISS
+#   end_day: "28/08/2026"
+#   days: 50
+# - ticker: GRPO
+#   end_day: "31/08/2026"
+#   days: 50
+# - ticker: NCRA
+#   end_day: "31/08/2026"
+#   days: 50
+# - ticker: NEOV
+#   end_day: "31/08/2026"
+#   days: 50
+# - ticker: COOT
+#   end_day: "31/08/2026"
+#   days: 50
+# - ticker: LIDR
+#   end_day: "01/09/2026"
+#   days: 50
+# - ticker: FLYE
+#   end_day: "01/09/2026"
+#   days: 50
+# - ticker: CHPT
+#   end_day: "03/09/2026"
+#   days: 50
+# - ticker: BAOS
+#   end_day: "04/09/2026"
+#   days: 50
+# - ticker: GRPO
+#   end_day: "04/09/2026"
+#   days: 50
+# - ticker: CDTG
+#   end_day: "04/09/2026"
+#   days: 50
+# - ticker: IMRN
+#   end_day: "04/09/2026"
+#   days: 50
+# - ticker: BIAF
+#   end_day: "04/09/2026"
+#   days: 50
+# - ticker: GRI
+#   end_day: "04/09/2026"
+#   days: 50
+# - ticker: VEEA
+#   end_day: "15/09/2026"
+#   days: 51
+# - ticker: SOAR
+#   end_day: "14/09/2026"
+#   days: 50
+# - ticker: VRA
+#   end_day: "14/09/2026"
+  # days: 50
+# - ticker: PDSB
+#   end_day: "15/09/2026"
+  # days: 50
+# - ticker: VRME
+#   end_day: "21/09/2026"
+#   days: 50
+# - ticker: NCPL
+#   end_day: "21/09/2026"
+#   days: 50
+# - ticker: FBGL
+#   end_day: "22/09/2026"
+#   days: 50
+# - ticker: PFSA
+#   end_day: "22/09/2026"
+#   days: 50
+# - ticker: PFSA
+#   end_day: "24/09/2026"
+#   days: 50
+# - ticker: IMCC
+#   end_day: "22/09/2026"
+#   days: 50
+# - ticker: GCDT
+#   end_day: "23/09/2026"
+#   days: 50
+# - ticker: LXHE
+#   end_day: "23/09/2026"
+#   days: 50
+# - ticker: SKYQ
+#   end_day: "24/09/2026"
+#   days: 50
+# - ticker: APUS
+#   end_day: "24/09/2026"
+#   days: 50
+# - ticker: SPHL
+#   end_day: "24/09/2026"
+#   days: 50
+# - ticker: PFSA
+#   end_day: "24/09/2026"
+#   days: 50
+# - ticker: STAK
+#   end_day: "24/09/2026"
+#   days: 50
+# - ticker: GRML
+#   end_day: "25/09/2026"
+#   days: 50
+# - ticker: VEEA
+#   end_day: "09/10/2026"
+#   days: 50
+# - ticker: OLB
+#   end_day: "09/10/2026"
+#   days: 50
+# - ticker: OLB
+#   end_day: "08/10/2026"
+#   days: 50
+# - ticker: OLB
+#   end_day: "08/10/2026"
+#   days: 50
+# - ticker: FLYE
+#   end_day: "08/10/2026"
+#   days: 50
+# - ticker: MEDS
+#   end_day: "08/10/2026"
+#   days: 50
+# - ticker: SBFM
+#   end_day: "07/10/2026"
+#   days: 50
+# - ticker: TOPP
+#   end_day: "07/10/2026"
+#   days: 50
+# - ticker: APUS
+#   end_day: "07/10/2026"
+#   days: 50
+# - ticker: OLB
+#   end_day: "06/10/2026"
+#   days: 50
+# - ticker: XHLD
+#   end_day: "06/10/2026"
+#   days: 50
+# - ticker: OLOX
+#   end_day: "06/10/2026"
+#   days: 50
+# - ticker: APUS
+#   end_day: "06/10/2026"
+#   days: 50
+# - ticker: SDEV
+#   end_day: "06/10/2026"
+#   days: 50
+# - ticker: BEAT
+#   end_day: "05/10/2026"
+#   days: 50
+# - ticker: VEEA
+#   end_day: "05/10/2026"
+#   days: 50
+# - ticker: OFAL
+#   end_day: "09/10/2026"
+#   days: 50
+# - ticker: NCPL
+#   end_day: "12/10/2026"
+#   days: 50
+# - ticker: SKYA
+#   end_day: "12/10/2026"
+#   days: 50
+# - ticker: MEDS
+#   end_day: "12/10/2026"
+#   days: 50
+# - ticker: GMRL
+#   end_day: "12/10/2026"
+#   days: 50
+# - ticker: SLND
+#   end_day: "12/10/2026"
+#   days: 50
+# - ticker: FLYE
+#   end_day: "13/10/2026"
+#   days: 50
+# - ticker: TCRT
+#   end_day: "13/10/2026"
+#   days: 50
+# - ticker: NMRA
+#   end_day: "15/10/2026"
+#   days: 50
+# - ticker: NCPL
+#   end_day: "15/10/2026"
+#   days: 50
+# - ticker: MMA
+#   end_day: "16/10/2026"
+#   days: 50
+# - ticker: XLAB
+#   end_day: "16/10/2026"
+#   days: 50
+# - ticker: TCRT
+#   end_day: "16/10/2026"
+#   days: 50
+# - ticker: WORX
+#   end_day: "19/10/2026"
+#   days: 50
+# - ticker: EXYN
+#   end_day: "19/10/2026"
+#   days: 50
+# - ticker: XLAB
+#   end_day: "19/10/2026"
+#   days: 50
+# - ticker: REED
+#   end_day: "20/10/2026"
+#   days: 50
+# - ticker: PRSO
+#   end_day: "20/10/2026"
+#   days: 50
+# - ticker: AMOD
+#   end_day: "21/10/2026"
+#   days: 50
+# - ticker: AHT
+#   end_day: "21/10/2026"
+#   days: 50
+# - ticker: AHT
+#   end_day: "21/10/2026"
+#   days: 50
+# - ticker: SHFS
+#   end_day: "21/10/2026"
+#   days: 50
+# - ticker: OLOX
+#   end_day: "21/10/2026"
+#   days: 50
+#
+- ticker: CJMB
+  end_day: "22/10/2026"
+  days: 50
+- ticker: NCPL
+  end_day: "22/10/2026"
+  days: 50
+- ticker: XLAB
+  end_day: "22/10/2026"
+  days: 50
+- ticker: LUCD
+  end_day: "23/10/2026"
+  days: 50
+- ticker: GPUS
+  end_day: "23/10/2026"
+  days: 50
+- ticker: BKYI 
+  end_day: "23/10/2026"
+  days: 50
+
+
+

@@ -184,6 +184,61 @@ Formato de cada línea:
 
 Los logs también se imprimen en consola con formato corto (`INFO: mensaje`).
 
+## Descargar futuros del oro
+
+Desde la raíz, con `MASSIVE_API_KEY` configurada:
+
+```powershell
+.\venv\Scripts\python.exe src/small_cli.py oro
+```
+
+Descubre los vencimientos simples de **GC** (oro COMEX), incluidos los vencidos
+que solapan el histórico permitido. Descarga barras **1m** de los últimos dos años
+hasta ocho horas antes del momento de ejecución, según Futures Basic. No incluye
+Micro Gold (MGC), combinaciones ni una serie continua con roll.
+
+El listado consulta fechas de referencia explícitas (`date`) mensuales desde el
+inicio del histórico hasta el corte, y une los vencimientos encontrados. Esto
+recupera contratos ya vencidos que no figuran en el catálogo actual, sin recorrer
+todas las versiones diarias de sus fichas. Los descarga por fecha de vencimiento,
+de antiguos a nuevos. La búsqueda inicial requiere alrededor de 26 peticiones
+para dos años (unos seis minutos con la pausa del plan, más el tiempo de red).
+No se limita a contratos actualmente activos. Antes del 12/03/2025 no se envía
+`type=single`, pues el campo no existía; las combinaciones se excluyen localmente.
+Si Massive devuelve otras fechas, productos ajenos a GC o contratos simples
+repetidos en una misma fecha, se detiene con un error.
+
+Guarda cada contrato en `data_dir/oro/{CONTRATO}.parquet`, con catálogo y progreso
+propios. Con la configuración actual el destino es `E:\smallcaps_data\oro`.
+Para usar otra raíz sin leer la configuración de acciones:
+
+```powershell
+.\venv\Scripts\python.exe src/small_cli.py oro --data-dir D:\datos_futuros
+```
+
+En ese ejemplo, guarda en `D:\datos_futuros\oro`. Las rutas relativas parten de la
+raíz del proyecto. También admite `oro --config ruta.yaml`.
+
+Deja **13 segundos antes de cada intento HTTP**, también al paginar. Ante HTTP 429
+espera al menos 60 segundos (o `Retry-After`, si es mayor) y reintenta hasta tres
+veces. Usa una sola ejecución de `oro` por destino y no ejecutes otras descargas
+con la misma clave simultáneamente: el límite del proveedor es compartido y este
+comando no controla otros procesos.
+
+Puedes interrumpir con Ctrl+C y repetir el mismo comando para reanudar. Se omiten
+intervalos completos ya confirmados, incluidos los vacíos; un paquete fallido se
+vuelve a solicitar. Conserva `_oro_progress.json` junto a los Parquet; si un Parquet
+con datos desaparece, se vuelve a descargar ese contrato. No borra barras antiguas
+cuando avanza la ventana del plan. No garantiza que cada vencimiento tenga barras.
+
+Una clave válida para acciones puede necesitar habilitar **Futures Basic** en la
+cuenta. HTTP 401/403 se informa como error, sin tratarlo como ausencia de datos.
+`download`, sus YAML y su conector de small caps conservan su comportamiento.
+
+Fuentes: [Futures Basic](https://massive.com/futures),
+[contratos](https://massive.com/docs/rest/futures/contracts) y
+[agregados](https://massive.com/docs/rest/futures/aggregates).
+
 ## Verificación
 
 ```powershell

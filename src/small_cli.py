@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.download.massive import MassiveDownloader
+from src.download.gold import download_gold
 from src.logger import setup_logger
 from src.storage.catalog import DataCatalog
 from src.storage.parquet_store import ParquetStore
@@ -173,10 +174,32 @@ def main(argv=None):
     catalog_cmd = commands.add_parser("catalog", help="Mostrar el catálogo de datos disponibles.")
     catalog_cmd.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="Configuración YAML.")
 
+    gold_cmd = commands.add_parser("oro", help="Descargar todos los vencimientos GC (Futures Basic).")
+    gold_cmd.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="Configuración YAML.")
+    gold_cmd.add_argument(
+        "--data-dir", type=Path,
+        help="Raíz de destino; los contratos se guardan en su subcarpeta oro.",
+    )
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
         return 0
+
+    if args.command == "oro":
+        try:
+            destination = args.data_dir
+            if destination is None:
+                destination = load_config(args.config)["data_dir"]
+            elif not destination.is_absolute():
+                destination = PROJECT_ROOT / destination
+            return download_gold(destination / "oro")
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError, yaml.YAMLError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        except KeyboardInterrupt:
+            print("Descarga interrumpida. Repite oro para reanudar.", file=sys.stderr)
+            return 130
 
     if args.command == "catalog":
         try:

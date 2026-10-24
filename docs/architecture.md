@@ -44,6 +44,29 @@ Por petición del usuario, cada módulo se organiza con entidad, interfaz e impl
 ## Proveedor Massive
 `src/download/massive.py` implementa `MassiveDownloader` vía la API REST de Massive (ex-Polygon): `GET /v2/aggs/ticker/{T}/range/1/minute/{from}/{to}`, con auth `Authorization: Bearer` desde `MASSIVE_API_KEY`. Descarga con `adjusted=false` (precios crudos), paginación por `next_url` y timestamps normalizados a UTC. `transactions` se mapea cuando el proveedor lo entrega; `spread` queda None (este endpoint no da bid/ask).
 
+## Descarga independiente de oro
+
+`small_cli.py oro` usa `src/download/massive_futures.py` y los endpoints
+`/futures/v1/contracts` y `/futures/v1/aggs/{ticker}`, sin modificar el conector
+de acciones ni el flujo de `download`. `MassiveFuturesDownloader` conserva el
+contrato común y normaliza nanosegundos a UTC. No añade dependencias.
+
+`src/download/gold.py` limita la ventana a dos años naturales y un corte de ocho
+horas para Futures Basic. Une catálogos GC mensuales con fecha explícita para
+recuperar también contratos ya vencidos; se ordenan por vencimiento ascendente.
+Antes del 12/03/2025 se omite el filtro type porque el campo no existía. No filtra
+por actividad, excluye combos y
+descarga paquetes de hasta 30 días. Todos los intentos HTTP esperan 13 segundos;
+los 429 tienen tres reintentos con espera adicional de al menos 60 segundos.
+La coordinación con otros procesos que usen la misma clave queda fuera de alcance.
+
+Se reutiliza `ParquetStore` en la subcarpeta `oro` de la raíz configurada o explícita,
+con un Parquet por vencimiento, catálogo propio y `_oro_progress.json` atómico.
+El checkpoint confirma intervalos completos tras persistir sus barras y permite
+reanudar incluso intervalos vacíos sin repetirlos. Un fallo antes del checkpoint
+repite el paquete y la persistencia existente deduplica. Una ejecución por destino.
+No se genera serie continua, roll ni descarga de Micro Gold.
+
 ## Almacenamiento
 Parquet local con Polars, un archivo por ticker en `data_dir/{TICKER}.parquet`. La escritura es incremental: merge con lo existente, deduplicación por `datetime` y escritura atómica, para no pisar barras ya descargadas. DynamoDB se consideraría ante una necesidad de consultas operativas en AWS; no se incorpora en esta fase.
 Referencias: https://parquet.apache.org/docs/overview/ y https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-query-scan.html.
